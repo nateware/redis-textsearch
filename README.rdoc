@@ -1,0 +1,3 @@
+= Redis::TextSearch - Use Redis to perform full text search with any type of class or data store
+
+Sweet.
