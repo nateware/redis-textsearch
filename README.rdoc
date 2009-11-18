@@ -1,3 +1,8 @@
 = Redis::TextSearch - Use Redis to perform full text search with any type of class or data store
 
-Sweet.
+This gem implements an extremely fast test search using Redis, based on the patterns from
+James Gray's {lists and sets in Redis post}[http://blog.grayproductions.net/articles/lists_and_sets_in_redis]
+as well as Antirez's {text search gist}[http://gist.github.com/120067]. You can use it with any type of class,
+whether it be ActiveRecord, DataMapper, MongoRecord, or even a class having nothing todo with an ORM.
+
+This is not intended to be the most full-featured text search available.
