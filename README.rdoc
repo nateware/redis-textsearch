@@ -1,8 +1,49 @@
-= Redis::TextSearch - Use Redis to perform full text search with any type of class or data store
+= Redis::TextSearch - Use Redis to perform text search from any type of class or data store
 
-This gem implements an extremely fast test search using Redis, based on the patterns from
+This gem implements an extremely fast text search using Redis, based on the patterns from
 James Gray's {lists and sets in Redis post}[http://blog.grayproductions.net/articles/lists_and_sets_in_redis]
 as well as Antirez's {text search gist}[http://gist.github.com/120067]. You can use it with any type of class,
-whether it be ActiveRecord, DataMapper, MongoRecord, or even a class having nothing todo with an ORM.
+whether it be ActiveRecord, DataMapper, MongoRecord, or even a class having nothing to do with an ORM.
 
-This is not intended to be the most full-featured text search available.
+This is not intended to be the most full-featured text search available.  For that, look into
+{Sphinx}[http://www.sphinxsearch.com/], {Solr}[http://lucene.apache.org/solr/], or
+{other alternatives}[http://en.wikipedia.org/wiki/Full_text_search#Open_Source_projects].
+This gem is designed to (a) be extremely fast and (b) handle any (or multiple) data stores.
+
+Like Redis::Atoms, the only requirement this gem has is that your class must provide an +id+ instance method
+which returns the ID for that instance. ActiveRecord, DataMapper, and MongoRecord all have +id+ methods which
+are known to be suitable. Since "ID" can be any data type as far as Redis::Atoms is concerned, you can even
+write an id method of your own that just returns a string, or an MD5 of the name, or something else unique. 
+
+== Installation
+
+    gem install gemcutter
+    gem tumble
+    gem install redis-textsearch
+    
+== Example
+
+Somewhere in your app initialization:
+
+    require 'redis'
+    require 'redis/text_search'
+    Redis::TextSearch.redis = Redis.new(:host => 'localhost', :port => 6379)
+
+Model class:
+
+    class Post < ActiveRecord::Base
+      include Redis::TextSearch
+    
+      text_index :title, :tags, :minlength => 2
+
+      def self.search(string)
+        find_all_by_ids text_search(strings)
+      end
+    end
+
+Then in your controller or other app code:
+
+    @posts = Post.search('bacon')
+    @posts = Post.search('bacon')
+    
+
