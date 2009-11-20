@@ -1,4 +1,4 @@
-= Redis::TextSearch - Use Redis to perform text search from any type of class or data store
+= Redis::TextSearch - Use Redis to perform text search from any type of class
 
 This gem implements an extremely fast text search using Redis, based on the patterns from
 James Gray's {lists and sets in Redis post}[http://blog.grayproductions.net/articles/lists_and_sets_in_redis]
@@ -36,7 +36,8 @@ Model class:
 
       text_index :title, :minlength => 2
       text_index :tags, :exact => true
-      
+
+      # Using AR callback (you can call update_text_indexes anywhere on your instance)
       after_save do |r|
         r.update_text_indexes
       end
@@ -54,8 +55,7 @@ Then in your controller or other app code:
     @posts = Post.text_search('bacon')   # 2 results
     @posts = Post.text_search('chef')    # 4 results (tags and title)
     @posts = Post.text_search('chef', :fields => :tags)   # 3 results (only search tags)
-    @posts = Post.text_search('technical', 'ruby')   # OR search (2 results)
-
+    @posts = Post.text_search('technical', 'ruby')   # OR search (3 results)
 
 == Author
 
