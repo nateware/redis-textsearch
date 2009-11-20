@@ -33,17 +33,31 @@ Model class:
 
     class Post < ActiveRecord::Base
       include Redis::TextSearch
-    
-      text_index :title, :tags, :minlength => 2
 
-      def self.search(string)
-        find_all_by_ids text_search(strings)
+      text_index :title, :minlength => 2
+      text_index :tags, :exact => true
+      
+      after_save do |r|
+        r.update_text_indexes
       end
     end
 
 Then in your controller or other app code:
 
-    @posts = Post.search('bacon')
-    @posts = Post.search('bacon')
-    
+    Post.create(:title => "All About Bacon", :tags => "chef nontechnical")
+    Post.create(:title => "All About Bacon - Part 2", :tags => "chef nontechnical")
+    Post.create(:title => "Homemade Belgian Waffles", :tags => "chef nontechnical")
+    Post.create(:title => "Using Redis with Ruby", :tags => "technical ruby redis")
+    Post.create(:title => "Installing Redis on Linux", :tags => "technical redis linux")
+    Post.create(:title => "Chef Deployment Recipes", :tags => "ruby howto")
 
+    @posts = Post.text_search('bacon')   # 2 results
+    @posts = Post.text_search('chef')    # 4 results (tags and title)
+    @posts = Post.text_search('chef', :fields => :tags)   # 3 results (only search tags)
+    @posts = Post.text_search('technical', 'ruby')   # OR search (2 results)
+
+
+== Author
+
+Copyright (c) 2009 {Nate Wiger}[http://nate.wiger.org].  All Rights Reserved.
+Released under the {Artistic License}[http://www.opensource.org/licenses/artistic-license-2.0.php].
