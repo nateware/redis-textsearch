@@ -117,7 +117,7 @@ describe Redis::TextSearch do
     Post.text_search('some', :order => 'updated_at desc')
   end
   
-  it "should have a text_filter method" do
+  xit "should have a text_filter method" do
     Post.text_filter(:tags => 'technical', :title => 'some')
     Post.text_filter(:tags => ['technical','ruby'], :title => 'some')  # IN
     Post.text_filter(:tags => 'technical', :title => 'some')

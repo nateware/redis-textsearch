@@ -129,7 +129,7 @@ class Redis
         # Execute finder
         text_search_find(ids, options)
       end
-      
+
       # Delete all text indexes for the given id.
       def delete_text_indexes(id, *fields)
         fields = @text_indexes.keys if fields.empty?
