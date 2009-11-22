@@ -37,24 +37,13 @@ TAGS = [
 
 describe Redis::TextSearch do
   before :all do
-    Post.redis.del('post:text_index:title:so') 
-    Post.redis.del('post:text_index:title:som') 
-    Post.redis.del('post:text_index:title:some') 
-    Post.redis.del('post:text_index:title:pl') 
-    Post.redis.del('post:text_index:title:pla') 
-    Post.redis.del('post:text_index:title:plai') 
-    Post.redis.del('post:text_index:title:plain') 
-    Post.redis.del('post:text_index:title:te') 
-    Post.redis.del('post:text_index:title:tex') 
-    Post.redis.del('post:text_index:title:text') 
-    Post.redis.del('post:text_index:title:texts') 
-    Post.redis.del('post:text_index:title:textst') 
-    Post.redis.del('post:text_index:title:textstr') 
-    Post.redis.del('post:text_index:title:textstri') 
-    Post.redis.del('post:text_index:title:textstrin') 
-    Post.redis.del('post:text_index:title:textstring') 
-    Post.redis.del('post:text_index:tags:personal') 
-    Post.redis.del('post:text_index:tags:nontechnical') 
+    Post.new(:id => 1).delete_text_indexes
+    Post.new(:id => 2).delete_text_indexes
+    Post.delete_text_indexes(3)
+  end
+  
+  after :all do
+    Post.new(:title => TITLES[0], :tags => TAGS[0], :id => 1).delete_text_indexes
   end
   
   it "should define text indexes in the class" do

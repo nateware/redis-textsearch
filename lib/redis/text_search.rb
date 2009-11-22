@@ -19,7 +19,7 @@ class Redis
         klass.instance_variable_set('@redis', @redis)
         klass.instance_variable_set('@text_indexes', {})
         klass.instance_variable_set('@text_search_find', nil)
-        klass.instance_variable_set('@text_index_exclude_list', nil)
+        klass.instance_variable_set('@text_index_exclude_list', DEFAULT_EXCLUDE_LIST)
         klass.send :include, InstanceMethods
         klass.extend ClassMethods
         klass.guess_text_search_find
@@ -129,20 +129,56 @@ class Redis
         # Execute finder
         text_search_find(ids, options)
       end
+      
+      # Delete all text indexes for the given id.
+      def delete_text_indexes(id, *fields)
+        fields = @text_indexes.keys if fields.empty?
+        fields.each do |field|
+          redis.pipelined do |pipe|
+            text_indexes_for(id, field).each do |key|
+              pipe.srem(key, id)
+            end
+            pipe.del field_key("#{field}_indexes", id)
+          end
+        end
+      end
+
+      def text_indexes_for(id, field) #:nodoc:
+        (redis.get(field_key("#{field}_indexes", id)) || '').split(';')
+      end
     end
 
     module InstanceMethods #:nodoc:
       def redis() self.class.redis end
-        
+      def field_key(name) #:nodoc:
+        self.class.field_key(name, id)
+      end
+
+      # Retrieve the options for the given field
+      def text_index_options_for(field)
+        self.class.text_indexes[field] ||
+          raise(BadTextIndex, "No such text index #{field} in #{self.class.name}")
+      end
+      
+      # Retrieve the reverse-mapping of text indexes for a given field.  Designed
+      # as a utility method but maybe you will find it useful.
+      def text_indexes_for(field)
+        self.class.text_indexes_for(id, field)
+      end
+
       # Update all text indexes for the given object.  Should be used in an +after_save+ hook
       # or other applicable area, for example r.update_text_indexes.  Can pass an array of
       # field names to restrict updates just to those fields.
       def update_text_indexes(*fields)
         fields = self.class.text_indexes.keys if fields.empty?
-        fields.each do |name|
-          options = self.class.text_indexes[name]
-          value = self.send(name)
-          return false if value.length < options[:minlength]
+        fields.each do |field|
+          options = self.class.text_indexes[field]
+          value = self.send(field)
+          return false if value.length < options[:minlength]  # too short to index
+          indexes = []
+
+          # If values is array, like :tags => ["a", "b"], use as-is
+          # Otherwise, split words on /\s+/ so :title => "Hey there" => ["Hey", "there"]
           values = value.is_a?(Array) ? value : options[:split] ? value.split(options[:split]) : value
           values.each do |val|
             val.gsub!(/[^\w\s]+/,'')
@@ -151,21 +187,60 @@ class Redis
             next if self.class.text_index_exclude_list.include? value
             if options[:exact]
               str = val.gsub(/\s+/, '.')  # can't have " " in Redis cmd string
-              redis.sadd("#{options[:key]}:#{str}", id)
+              indexes << "#{options[:key]}:#{str}"
             else
               len = options[:minlength]
-              redis.pipelined do |cmd|
-                while len < val.length
-                  str = val[0..len].gsub(/\s+/, '.')  # can't have " " in Redis cmd string
-                  # puts "Post.redis.set_members('#{options[:key]}:#{str}').should == ['1']"
-                  cmd.sadd("#{options[:key]}:#{str}", id)
-                  len += 1
-                end
+              while len < val.length
+                str = val[0..len].gsub(/\s+/, '.')  # can't have " " in Redis cmd string
+                indexes << "#{options[:key]}:#{str}"
+                len += 1
               end
             end
           end
+
+          # Determine what, if anything, needs to be done.  If the indexes are unchanged,
+          # don't make any trips to Redis.  Saves tons of useless network calls.
+          old_indexes = text_indexes_for(field)
+          new_indexes = indexes - old_indexes
+          del_indexes = old_indexes - indexes
+
+          # No change, so skip
+          # puts "[#{field}] old=#{old_indexes.inspect} / idx=#{indexes.inspect} / new=#{new_indexes.inspect} / del=#{del_indexes.inspect}"
+          next if new_indexes.empty? and del_indexes.empty?
+
+          # Add new indexes
+          exec_pipelined_index_cmd(:sadd, new_indexes)
+
+          # Delete indexes no longer used
+          exec_pipelined_index_cmd(:srem, del_indexes)
+          
+          # Replace our reverse map of indexes
+          redis.set field_key("#{field}_indexes"), indexes.join(';')
+        end # fields.each
+      end
+
+      # Delete all text indexes that the object is a member of.  Should be used in
+      # an +after_destroy+ hook to remove the dead object.
+      def delete_text_indexes(*fields)
+        fields = self.class.text_indexes.keys if fields.empty?
+        fields.each do |field|
+          del_indexes = text_indexes_for(field)
+          exec_pipelined_index_cmd(:srem, del_indexes)
+          redis.del field_key("#{field}_indexes")
         end
       end
+
+      private
+      
+      def exec_pipelined_index_cmd(cmd, indexes)
+        return if indexes.empty?
+        redis.pipelined do |pipe|
+          indexes.each do |key|
+            pipe.send(cmd, key, id)
+          end
+        end
+      end
+      
     end
   end
 end
