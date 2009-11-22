@@ -7,6 +7,8 @@ class Redis
     class NoFinderMethod < StandardError; end
     class BadTextIndex < StandardError; end
 
+    DEFAULT_EXCLUDE_LIST = %w(a an and as at but by for in into of on onto to)
+
     class << self
       def redis=(conn) @redis = conn end
       def redis
@@ -16,10 +18,11 @@ class Redis
       def included(klass)
         klass.instance_variable_set('@redis', @redis)
         klass.instance_variable_set('@text_indexes', {})
-        klass.instance_variable_set('@finder_method', nil)
+        klass.instance_variable_set('@text_search_find', nil)
+        klass.instance_variable_set('@text_index_exclude_list', nil)
         klass.send :include, InstanceMethods
         klass.extend ClassMethods
-        klass.guess_finder_method
+        klass.guess_text_search_find
       end
     end
 
@@ -27,6 +30,12 @@ class Redis
     module ClassMethods
       attr_accessor :redis
       attr_reader :text_indexes
+      
+      # Words to exclude from text indexing.  By default, includes common
+      # English prepositions like "a", "an", "the", "and", "or", etc.
+      # This is an accessor to an array, so you can use += or << to add to it.
+      # See the constant +DEFAULT_EXCLUDE_LIST+ for the default list.
+      attr_accessor :text_index_exclude_list
 
       # Set the Redis prefix to use. Defaults to model_name
       def prefix=(prefix) @prefix = prefix end
@@ -44,24 +53,24 @@ class Redis
       
       # This is called when the class is imported, and uses reflection to guess
       # how to retrieve records.  You can override it by explicitly defining a
-      # +finder_method+ class method that takes an array of IDs as an argument.
-      def guess_finder_method
+      # +text_search_find+ class method that takes an array of IDs as an argument.
+      def guess_text_search_find
         if defined?(ActiveRecord::Base) and is_a?(ActiveRecord::Base)
           instance_eval <<-EndMethod
-            def finder_method(ids, options)
+            def text_search_find(ids, options)
               all(options.merge(:conditions => {:#{primary_key} => ids}))
             end
           EndMethod
         elsif defined?(MongoRecord::Base) and is_a?(MongoRecord::Base)
           instance_eval <<-EndMethod
-            def finder_method(ids, options)
+            def text_search_find(ids, options)
               all(options.merge(:conditions => {:#{primary_key} => ids}))
             end
           EndMethod
         elsif respond_to?(:get)
           # DataMapper::Resource is an include, so is_a? won't work
           instance_eval <<-EndMethod
-            def finder_method(ids, options)
+            def text_search_find(ids, options)
               get(ids, options)
             end
           EndMethod
@@ -89,8 +98,8 @@ class Redis
       def text_search(*args)
         options = args.last.is_a?(Hash) ? args.pop : {}
         fields = Array(options[:fields] || @text_indexes.keys)
-        unless defined?(:finder_method)
-          raise NoFinderMethod, "Could not detect how to find records; you must def finder_method()"
+        unless defined?(:text_search_find)
+          raise NoFinderMethod, "Could not detect how to find records; you must def text_search_find()"
         end
 
         # Assemble set names for our intersection
@@ -118,7 +127,7 @@ class Redis
         end
 
         # Execute finder
-        finder_method(ids, options)
+        text_search_find(ids, options)
       end
     end
 
@@ -132,13 +141,14 @@ class Redis
         fields = self.class.text_indexes.keys if fields.empty?
         fields.each do |name|
           options = self.class.text_indexes[name]
-          value  = self.send(name)
+          value = self.send(name)
           return false if value.length < options[:minlength]
           values = value.is_a?(Array) ? value : options[:split] ? value.split(options[:split]) : value
           values.each do |val|
             val.gsub!(/[^\w\s]+/,'')
             val.downcase!
             next if value.length < options[:minlength]
+            next if self.class.text_index_exclude_list.include? value
             if options[:exact]
               str = val.gsub(/\s+/, '.')  # can't have " " in Redis cmd string
               redis.sadd("#{options[:key]}:#{str}", id)

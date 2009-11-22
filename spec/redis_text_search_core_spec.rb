@@ -7,7 +7,7 @@ class Post
   text_index :title
   text_index :tags, :exact => true
 
-  def self.finder_method(ids, options)
+  def self.text_search_find(ids, options)
     ids
   end
 
@@ -119,4 +119,18 @@ describe Redis::TextSearch do
     Post.text_search('nontechnical', :fields => [:title]).sort.should == []
   end
   
+  
+  it "should delete text indexes" do
+    post.delete_text_indexes
+  end
+  
+  it "should pass options thru to find" do
+    Post.text_search('some', :order => 'updated_at desc')
+  end
+  
+  it "should have a text_filter method" do
+    Post.text_filter(:tags => 'technical', :title => 'some')
+    Post.text_filter(:tags => ['technical','ruby'], :title => 'some')  # IN
+    Post.text_filter(:tags => 'technical', :title => 'some')
+  end
 end

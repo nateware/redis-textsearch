@@ -41,6 +41,9 @@ Model class:
       after_save do |r|
         r.update_text_indexes
       end
+      after_destroy do |r|
+        r.delete_text_indexes
+      end
     end
 
 Then in your controller or other app code:
@@ -55,7 +58,23 @@ Then in your controller or other app code:
     @posts = Post.text_search('bacon')   # 2 results
     @posts = Post.text_search('chef')    # 4 results (tags and title)
     @posts = Post.text_search('chef', :fields => :tags)   # 3 results (only search tags)
-    @posts = Post.text_search('technical', 'ruby')   # OR search (3 results)
+    @posts = Post.text_search('technical', 'ruby')   # AND search (1 result)
+
+You can pass options through to the +find+ method:
+
+    @posts = Post.text_search('redis', :order => 'updated_at desc')
+    @posts = Post.text_search('redis', :select => 'id,title', :limit => 50)
+
+Pagination:
+
+    @posts = Post.text_search('redis', :page => 1, :per_page => 10)
+    @posts = Post.text_search('redis', :page => 1)  # use class.per_page like will_paginate
+
+Use +text_filter+ to match specific fields against specific strings:
+
+    @posts = Post.text_filter(:tags => 'technical', :title => 'redis')
+    @posts = Post.text_filter({:tags => 'technical', :title => 'redis'},
+                              :per_page => 20, :order => 'updated_at desc')
 
 == Author
 
