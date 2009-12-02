@@ -2,7 +2,7 @@ spec = Gem::Specification.new do |s|
   s.name = 'redis-textsearch'
   s.version = '0.1.0'
   s.summary = "Fast text search and word indexes using Redis"
-  s.description = %{Redis::TextSearch is a lightweight library that enables indexed text search from any class or data store}
+  s.description = %{Index and search your models using Redis. Works with any ORM or data store.}
   s.files = Dir['lib/**/*.rb'] + Dir['spec/**/*.rb']
   s.require_path = 'lib'
   s.autorequire = 'redis/text_search'
@@ -12,4 +12,6 @@ spec = Gem::Specification.new do |s|
   s.author = "Nate Wiger"
   s.email = "nate@wiger.org"
   s.homepage = "http://github.com/nateware/redis-textsearch"
+  s.requirements << 'redis, v0.1 or greater'
+  s.add_dependency('redis', '>= 0.1')
 end

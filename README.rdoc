@@ -10,16 +10,18 @@ This is not intended to be the most full-featured text search available.  For th
 {other alternatives}[http://en.wikipedia.org/wiki/Full_text_search#Open_Source_projects].
 This gem is designed to (a) be extremely fast and (b) handle any (or multiple) data stores.
 
-Like Redis::Atoms, the only requirement this gem has is that your class must provide an +id+ instance method
+The only requirement this gem has is that your class must provide an +id+ instance method
 which returns the ID for that instance. ActiveRecord, DataMapper, and MongoRecord all have +id+ methods which
-are known to be suitable. Since "ID" can be any data type as far as Redis::Atoms is concerned, you can even
-write an id method of your own that just returns a string, or an MD5 of the name, or something else unique. 
+are known to be suitable. Since "ID" can be any data type, you can even write an +id+ method of your own
+that just returns a string, or an MD5 of a filename, or something else unique. 
 
 == Installation
 
     gem install gemcutter
     gem tumble
     gem install redis-textsearch
+
+== Initialization
     
 == Example
 

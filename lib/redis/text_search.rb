@@ -97,13 +97,23 @@ class Redis
       #   :per_page
       def text_search(*args)
         options = args.last.is_a?(Hash) ? args.pop : {}
-        fields = Array(options[:fields] || @text_indexes.keys)
-        unless defined?(:text_search_find)
-          raise NoFinderMethod, "Could not detect how to find records; you must def text_search_find()"
+        fields = Array(options.delete(:fields) || @text_indexes.keys)
+        finder = options.delete(:find)
+        unless finder
+          unless defined?(:text_search_find)
+            raise NoFinderMethod, "Could not detect how to find records; you must def text_search_find()"
+          end
+          finder = :text_search_find
         end
 
-        # Assemble set names for our intersection
-        # Must loop for each field, since it's an "or"
+        # Assemble set names for our intersection.  Must loop for each field, since it's an "or".
+        # Accept two ways of doing search: either [:field, 'value'], [:field, 'value'], or
+        # 'value','value', :fields => [:field, :field].  The first is an intersection, the latter
+        # a union.
+        if args.empty?
+          
+        
+        
         raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search" unless args.length > 0
         ids = []
         fields.each do |name|
@@ -127,7 +137,7 @@ class Redis
         end
 
         # Execute finder
-        text_search_find(ids, options)
+        send(finder, ids, options)
       end
 
       # Delete all text indexes for the given id.
@@ -147,6 +157,11 @@ class Redis
         (redis.get(field_key("#{field}_indexes", id)) || '').split(';')
       end
     end
+    
+    # This applies a filter to the specified field and returns self. 
+    def text_filter
+      
+    end
 
     module InstanceMethods #:nodoc:
       def redis() self.class.redis end
@@ -164,6 +179,12 @@ class Redis
       # as a utility method but maybe you will find it useful.
       def text_indexes_for(field)
         self.class.text_indexes_for(id, field)
+      end
+      
+      # Retrieve all text indexes
+      def text_indexes
+        fields = self.class.text_indexes.keys
+        fields.collect{|f| text_indexes_for(f)}.flatten
       end
 
       # Update all text indexes for the given object.  Should be used in an +after_save+ hook

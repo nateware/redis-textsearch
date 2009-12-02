@@ -8,7 +8,7 @@ class Post
   text_index :tags, :exact => true
 
   def self.text_search_find(ids, options)
-    ids
+    options.empty? ? ids : [ids, options]
   end
 
   def initialize(attrib)
@@ -37,13 +37,19 @@ TAGS = [
 
 describe Redis::TextSearch do
   before :all do
-    Post.new(:id => 1).delete_text_indexes
-    Post.new(:id => 2).delete_text_indexes
+    @post  = Post.new(:title => TITLES[0], :tags => TAGS[0], :id => 1)
+    @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2)
+    @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2], :id => 3)
+    
+    @post.delete_text_indexes
+    @post2.delete_text_indexes
     Post.delete_text_indexes(3)
   end
-  
+
   after :all do
-    Post.new(:title => TITLES[0], :tags => TAGS[0], :id => 1).delete_text_indexes
+    @post.delete_text_indexes
+    @post2.delete_text_indexes
+    Post.delete_text_indexes(3)
   end
   
   it "should define text indexes in the class" do
@@ -52,10 +58,8 @@ describe Redis::TextSearch do
   end
 
   it "should update text indexes correctly" do
-    post = Post.new(:title => TITLES[0], :tags => TAGS[0], :id => 1)
-    post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2)
-    post.update_text_indexes
-    post2.update_text_indexes
+    @post.update_text_indexes
+    @post2.update_text_indexes
 
     Post.redis.set_members('post:text_index:title:so').should == ['1']
     Post.redis.set_members('post:text_index:title:som').should == ['1']
@@ -95,7 +99,7 @@ describe Redis::TextSearch do
 
   it "should search text indexes and return records" do
     Post.text_search('some').should == ['1']
-    Post.new(:title => TITLES[2], :tags => TAGS[2], :id => 3).update_text_indexes
+    @post3.update_text_indexes
     Post.text_search('some').sort.should == ['1','3']
     Post.text_search('plain').sort.should == ['1','2']
     Post.text_search('plain','text').sort.should == ['1','2']
@@ -110,15 +114,17 @@ describe Redis::TextSearch do
   
   
   it "should delete text indexes" do
-    post.delete_text_indexes
+    @post.delete_text_indexes
+    @post.text_indexes.should == []
   end
   
   it "should pass options thru to find" do
-    Post.text_search('some', :order => 'updated_at desc')
+    Post.text_search('some', :order => 'updated_at desc').should == [['3'], {:order=>"updated_at desc"}]
   end
   
   xit "should have a text_filter method" do
-    Post.text_filter(:tags => 'technical', :title => 'some')
+    Post.text_filter(:tags, 'technical')
+    Post.text_filter([:tags, 'technical'], [:title, 'some', 'where'])
     Post.text_filter(:tags => ['technical','ruby'], :title => 'some')  # IN
     Post.text_filter(:tags => 'technical', :title => 'some')
   end
