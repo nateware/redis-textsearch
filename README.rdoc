@@ -78,12 +78,14 @@ You can also specify specific fields to search as a hash:
 
     @posts = Post.text_search(:tags => 'chef')  # 4 results
     @posts = Post.text_search(:tags => ['technical','ruby'])  # AND (1 result)
+    @posts = Post.text_search(:tags => 'redis', :title => 'linux')  # 1 result
     @posts = Post.text_search(:title => 'chef') # 1 result
 
 Note that if you need to pass options to +find+ AND search specific fields, the first
 hash must be in brackets:
 
-    @posts = Post.text_search({:tags => 'chef'}, :order => 'updated_at desc', :per_page => 5)
+    @posts = Post.text_search({:tags => 'chef', :title => 'deployment'},
+                              :order => 'updated_at desc')
 
 == Author
 
