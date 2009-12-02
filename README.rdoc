@@ -23,13 +23,13 @@ that just returns a string, or an MD5 of a filename, or something else unique.
 
 == Initialization
     
-== Example
-
-Somewhere in your app initialization:
+If on Rails, config/initializers/redis.rb is a good place for this:
 
     require 'redis'
     require 'redis/text_search'
     Redis::TextSearch.redis = Redis.new(:host => 'localhost', :port => 6379)
+
+== Example
 
 Model class:
 
@@ -48,36 +48,42 @@ Model class:
       end
     end
 
-Then in your controller or other app code:
+Create posts:
 
     Post.create(:title => "All About Bacon", :tags => "chef nontechnical")
     Post.create(:title => "All About Bacon - Part 2", :tags => "chef nontechnical")
     Post.create(:title => "Homemade Belgian Waffles", :tags => "chef nontechnical")
     Post.create(:title => "Using Redis with Ruby", :tags => "technical ruby redis")
     Post.create(:title => "Installing Redis on Linux", :tags => "technical redis linux")
-    Post.create(:title => "Chef Deployment Recipes", :tags => "ruby howto")
+    Post.create(:title => "Chef Deployment Recipes", :tags => "ruby howto chef")
+
+Then search for them:
 
     @posts = Post.text_search('bacon')   # 2 results
     @posts = Post.text_search('chef')    # 4 results (tags and title)
-    @posts = Post.text_search('chef', :fields => :tags)   # 3 results (only search tags)
     @posts = Post.text_search('technical', 'ruby')   # AND search (1 result)
+    @posts = Post.text_search('chef', :fields => :tags)   # 3 results (only search tags)
 
 You can pass options through to the +find+ method:
 
     @posts = Post.text_search('redis', :order => 'updated_at desc')
     @posts = Post.text_search('redis', :select => 'id,title', :limit => 50)
 
-And do pagination:
+And do pagination (adapted from +will_paginate+):
 
     @posts = Post.text_search('redis', :page => 1, :per_page => 10)
-    @posts = Post.text_search('redis', :page => 1)  # use class.per_page like will_paginate
-    
-And +text_search+ can handle +AND+ and +OR+ tokens:
+    @posts = Post.text_search('redis', :page => 1)  # uses class.per_page like will_paginate
 
-    @posts = Post.text_search('technical AND ruby')
-    @posts = Post.text_search('technical OR howto OR ruby')
+You can also specify specific fields to search as a hash: 
 
-Which makes it easy to attach an HTML form to it.
+    @posts = Post.text_search(:tags => 'chef')  # 4 results
+    @posts = Post.text_search(:tags => ['technical','ruby'])  # AND (1 result)
+    @posts = Post.text_search(:title => 'chef') # 1 result
+
+Note that if you need to pass options to +find+ AND search specific fields, the first
+hash must be in brackets:
+
+    @posts = Post.text_search({:tags => 'chef'}, :order => 'updated_at desc', :per_page => 5)
 
 == Author
 

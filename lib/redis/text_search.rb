@@ -9,6 +9,9 @@ class Redis
 
     DEFAULT_EXCLUDE_LIST = %w(a an and as at but by for in into of on onto to)
 
+    dir = File.expand_path(__FILE__.sub(/\.rb$/,''))
+    autoload :Collection, File.join(dir, 'collection')
+
     class << self
       def redis=(conn) @redis = conn end
       def redis
@@ -23,6 +26,9 @@ class Redis
         klass.send :include, InstanceMethods
         klass.extend ClassMethods
         klass.guess_text_search_find
+        class << klass
+          define_method(:per_page) { 30 } unless respond_to?(:per_page)
+        end
       end
     end
 
@@ -98,7 +104,7 @@ class Redis
       def text_search(*args)
         options = args.length > 1 && args.last.is_a?(Hash) ? args.pop : {}
         fields = Array(options.delete(:fields) || @text_indexes.keys)
-        finder = options.delete(:find)
+        finder = options.delete(:finder)
         unless finder
           unless defined?(:text_search_find)
             raise NoFinderMethod, "Could not detect how to find records; you must def text_search_find()"
@@ -116,7 +122,7 @@ class Redis
           raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search"
         elsif args.first.is_a?(Hash)
           sets = []
-          args.each do |f,v|
+          args.first.each do |f,v|
             sets += text_search_sets_for(f,v)
           end
           # Execute single intersection (AND)
@@ -129,13 +135,22 @@ class Redis
           end
         end
 
-        # Calculate pagination if applicable
-        if options[:page]
-          per_page = options[:per_page] || self.respond_to?(:per_page) ? per_page : 10
-        end
+        # Calculate pagination if applicable. Presence of :page indicates we want pagination.
+        # Adapted from will_paginate/finder.rb
+        if options.has_key?(:page)
+          page = options.delete(:page) || 1
+          per_page = options.delete(:per_page) || self.per_page
+          total = ids.length
 
-        # Execute finder
-        send(finder, ids, options)
+          Redis::TextSearch::Collection.create(page, per_page, total) do |pager|
+            # Convert page/per_page to limit/offset
+            options.merge!(:offset => pager.offset, :limit => pager.per_page)
+            pager.replace(send(finder, ids, options){ |*a| yield(*a) if block_given? })
+          end
+        else
+          # Execute finder directly
+          send(finder, ids, options)
+        end
       end
 
       # Filter and return self. Chainable.
@@ -168,7 +183,7 @@ class Redis
         end
       end
     end
-    
+
     module InstanceMethods #:nodoc:
       def redis() self.class.redis end
       def field_key(name) #:nodoc:
@@ -186,7 +201,7 @@ class Redis
       def text_indexes_for(field)
         self.class.text_indexes_for(id, field)
       end
-      
+
       # Retrieve all text indexes
       def text_indexes
         fields = self.class.text_indexes.keys

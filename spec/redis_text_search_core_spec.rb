@@ -27,8 +27,8 @@ end
 
 TITLES = [
   'Some plain text',
-  'More plain textstring',
-  'Come get somebody personal',
+  'More plain textstring comments',
+  'Come get somebody personal comments',
   '*Welcome to Nate\'s new BLOG!!',
 ]
 
@@ -44,18 +44,12 @@ describe Redis::TextSearch do
     @post  = Post.new(:title => TITLES[0], :tags => TAGS[0], :id => 1)
     @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2)
     @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2], :id => 3)
-    
+
     @post.delete_text_indexes
     @post2.delete_text_indexes
     Post.delete_text_indexes(3)
   end
 
-  after :all do
-    @post.delete_text_indexes
-    @post2.delete_text_indexes
-    Post.delete_text_indexes(3)
-  end
-  
   it "should define text indexes in the class" do
     Post.text_indexes[:title][:key].should   == 'post:text_index:title'
     Post.text_indexes[:tags][:key].should == 'post:text_index:tags'
@@ -108,29 +102,42 @@ describe Redis::TextSearch do
     Post.text_search('plain').sort.should == ['1','2']
     Post.text_search('plain','text').sort.should == ['1','2']
     Post.text_search('plain','textstr').sort.should == ['2']
-    Post.text_search('some','text').sort.should == ['1']
+    Post.text_search('some','TExt').sort.should == ['1']
+    Post.text_search('techNIcal').sort.should == ['2','3']
     Post.text_search('nontechnical').sort.should == ['1']
     Post.text_search('personal').sort.should == ['1','3']
-    Post.text_search('personal', :fields => :tags).sort.should == ['1']
-    Post.text_search('personal', :fields => [:tags]).sort.should == ['1']
+    Post.text_search('personAL', :fields => :tags).sort.should == ['1']
+    Post.text_search('PERsonal', :fields => [:tags]).sort.should == ['1']
     Post.text_search('nontechnical', :fields => [:title]).sort.should == []
   end
-  
-  
+
+  it "should pass options thru to find" do
+    Post.text_search('some', :order => 'updated_at desc').should == [['3','1'], {:order=>"updated_at desc"}]
+    Post.text_search('some', :select => 'id,username').should == [['3','1'], {:select => 'id,username'}]
+  end
+
+  it "should handle pagination" do
+    Post.text_search('some', :page => 1).should == [['3','1'], {:offset=>0, :limit=>30}]
+    Post.text_search('some', :page => 2, :per_page => 5).should == [['3','1'], {:offset=>5, :limit=>5}]
+    Post.text_search('some', :page => 15, :per_page => 3).should == [['3','1'], {:offset=>42, :limit=>3}]
+  end
+
+  it "should support a hash to the text_search method" do
+    Post.text_search(:tags => 'technical').sort.should == ['2','3']
+    Post.text_search(:tags => 'nontechnical').sort.should == ['1']
+    Post.text_search(:tags => 'technical', :title => 'plain').should == ['2']
+    Post.text_search(:tags => ['technical','MYsql'], :title => 'Mo').should == ['2']
+    Post.text_search(:tags => ['technical','MYsql'], :title => 'some').should == []
+    Post.text_search(:tags => 'technical', :title => 'comments').sort.should == ['2','3']
+  end
+
+  # MUST BE LAST!!!!!!
   it "should delete text indexes" do
     @post.delete_text_indexes
+    @post2.delete_text_indexes
+    Post.delete_text_indexes(3)
     @post.text_indexes.should == []
-  end
-  
-  it "should pass options thru to find" do
-    Post.text_search('some', :order => 'updated_at desc').should == [['3'], {:order=>"updated_at desc"}]
-    Post.text_search('some', :select => 'id,username').should == [['3'], {:select => 'id,username'}]
-  end
-  
-  xit "should have a text_filter method" do
-    Post.text_filter(:tags, 'technical')
-    Post.text_filter([:tags, 'technical'], [:title, 'some', 'where'])
-    Post.text_filter(:tags => ['technical','ruby'], :title => 'some')  # IN
-    Post.text_filter(:tags => 'technical', :title => 'some')
+    @post2.text_indexes.should == []
+    @post3.text_indexes.should == []
   end
 end
