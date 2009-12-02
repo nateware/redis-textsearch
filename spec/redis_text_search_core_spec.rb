@@ -11,6 +11,10 @@ class Post
     options.empty? ? ids : [ids, options]
   end
 
+  def self.first(ids, options)
+    
+  end
+
   def initialize(attrib)
     @attrib = attrib
     @id = attrib[:id] || 1
@@ -120,6 +124,7 @@ describe Redis::TextSearch do
   
   it "should pass options thru to find" do
     Post.text_search('some', :order => 'updated_at desc').should == [['3'], {:order=>"updated_at desc"}]
+    Post.text_search('some', :select => 'id,username').should == [['3'], {:select => 'id,username'}]
   end
   
   xit "should have a text_filter method" do

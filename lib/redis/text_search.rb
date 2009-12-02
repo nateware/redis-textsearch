@@ -96,7 +96,7 @@ class Redis
       #   :page
       #   :per_page
       def text_search(*args)
-        options = args.last.is_a?(Hash) ? args.pop : {}
+        options = args.length > 1 && args.last.is_a?(Hash) ? args.pop : {}
         fields = Array(options.delete(:fields) || @text_indexes.keys)
         finder = options.delete(:find)
         unless finder
@@ -106,28 +106,26 @@ class Redis
           finder = :text_search_find
         end
 
-        # Assemble set names for our intersection.  Must loop for each field, since it's an "or".
-        # Accept two ways of doing search: either [:field, 'value'], [:field, 'value'], or
-        # 'value','value', :fields => [:field, :field].  The first is an intersection, the latter
-        # a union.
-        if args.empty?
-          
-        
-        
-        raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search" unless args.length > 0
+        #
+        # Assemble set names for our intersection.
+        # Accept two ways of doing search: either {:field => ['value','value'], :field => 'value'},
+        # or 'value','value', :fields => [:field, :field].  The first is an AND, the latter an OR.
+        #
         ids = []
-        fields.each do |name|
-          opts = @text_indexes[name].merge(options)
-          keys = args.collect do |val|
-            str = val.downcase.gsub(/[^\w\s]+/,'').gsub(/\s+/, '.')  # can't have " " in Redis cmd string
-            "#{opts[:key]}:#{str}"
+        if args.empty?
+          raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search"
+        elsif args.first.is_a?(Hash)
+          sets = []
+          args.each do |f,v|
+            sets += text_search_sets_for(f,v)
           end
-
-          # Execute intersection
-          if keys.length > 1
-            ids += redis.set_intersect(*keys)
-          else
-            ids += redis.set_members(keys.first)
+          # Execute single intersection (AND)
+          ids = redis.set_intersect(*sets)
+        else
+          fields.each do |f|
+            sets = text_search_sets_for(f,args)
+            # Execute intersection per loop (OR)
+            ids += redis.set_intersect(*sets)
           end
         end
 
@@ -138,6 +136,11 @@ class Redis
 
         # Execute finder
         send(finder, ids, options)
+      end
+
+      # Filter and return self. Chainable.
+      def text_filter(field)
+        raise UnimplementedError
       end
 
       # Delete all text indexes for the given id.
@@ -156,13 +159,16 @@ class Redis
       def text_indexes_for(id, field) #:nodoc:
         (redis.get(field_key("#{field}_indexes", id)) || '').split(';')
       end
+
+      def text_search_sets_for(field, values)
+        key = @text_indexes[field][:key]
+        Array(values).collect do |val|
+          str = val.downcase.gsub(/[^\w\s]+/,'').gsub(/\s+/, '.')  # can't have " " in Redis cmd string
+          "#{key}:#{str}"
+        end
+      end
     end
     
-    # This applies a filter to the specified field and returns self. 
-    def text_filter
-      
-    end
-
     module InstanceMethods #:nodoc:
       def redis() self.class.redis end
       def field_key(name) #:nodoc:
