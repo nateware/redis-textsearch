@@ -174,6 +174,7 @@ describe Redis::TextSearch do
     check_result_ids Post.text_search('some', :conditions => ['id < ?', 2]), [1]
     check_result_ids Post.text_search('some', :conditions => ['id = ?', 1]), [1]
     check_result_ids Post.text_search('some', :conditions => ['id = ? and title = ?', 1, TITLES[0]]), [1]
+    check_result_ids Post.text_search('some', :conditions => ['title = :title and id = :id', {:id => 1, :title => TITLES[0]}]), [1]
     check_result_ids Post.text_search('some', :conditions => {:title => TITLES[0]}), [1]
     check_result_ids Post.text_search('some', :conditions => {:title => TITLES[0], :tags => TAGS[0] * ' '}), [1]
 
