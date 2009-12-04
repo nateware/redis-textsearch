@@ -62,20 +62,26 @@ class Redis
       # how to retrieve records.  You can override it by explicitly defining a
       # +text_search_find+ class method that takes an array of IDs as an argument.
       def guess_text_search_find
-        if defined?(ActiveRecord::Base) and is_a?(ActiveRecord::Base)
+        if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
+          instance_eval <<-EndMethod
+            def text_search_find(ids, options)
+              puts "IDS=\#{ids.inspect}"
+              all(options.merge(:conditions => {:#{primary_key} => ids}))
+            end
+          EndMethod
+        elsif defined?(MongoRecord::Base) and ancestors.include?(MongoRecord::Base)
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
               all(options.merge(:conditions => {:#{primary_key} => ids}))
             end
           EndMethod
-        elsif defined?(MongoRecord::Base) and is_a?(MongoRecord::Base)
+        elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
               all(options.merge(:conditions => {:#{primary_key} => ids}))
             end
           EndMethod
-        elsif respond_to?(:get)
-          # DataMapper::Resource is an include, so is_a? won't work
+        elsif defined?(DataMapper::Resource) and included_modules.include?(DataMapper::Resource)          
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
               get(ids, options)

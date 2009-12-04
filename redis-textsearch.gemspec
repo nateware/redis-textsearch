@@ -1,6 +1,6 @@
 spec = Gem::Specification.new do |s|
   s.name = 'redis-textsearch'
-  s.version = '0.1.0'
+  s.version = '0.1.1'
   s.summary = "Fast text search and word indexes using Redis"
   s.description = %{Crazy fast text search using Redis. Works with any ORM or data store.}
   s.files = Dir['lib/**/*.rb'] + Dir['spec/**/*.rb']
