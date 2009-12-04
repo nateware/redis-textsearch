@@ -65,7 +65,6 @@ class Redis
         if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
-              puts "IDS=\#{ids.inspect}"
               all(options.merge(:conditions => {:#{primary_key} => ids}))
             end
           EndMethod
