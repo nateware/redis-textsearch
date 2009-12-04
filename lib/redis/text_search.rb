@@ -1,13 +1,14 @@
 # Redis::TextSearch - Use Redis to add text search to your app.
 class Redis
   #
-  # Redis::TextSearch enables high-performance text search in your app.
+  # Redis::TextSearch enables high-performance text search in your app using
+  # Redis.  You can perform text search on any type of data store or ORM.
   #
   module TextSearch
     class NoFinderMethod < StandardError; end
     class BadTextIndex < StandardError; end
 
-    DEFAULT_EXCLUDE_LIST = %w(a an and as at but by for in into of on onto to)
+    DEFAULT_EXCLUDE_LIST = %w(a an and as at but by for in into of on onto to the)
 
     dir = File.expand_path(__FILE__.sub(/\.rb$/,''))
     autoload :Collection, File.join(dir, 'collection')
