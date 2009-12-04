@@ -7,6 +7,7 @@ class Redis
   module TextSearch
     class NoFinderMethod < StandardError; end
     class BadTextIndex < StandardError; end
+    class BadConditions < StandardError; end
 
     DEFAULT_EXCLUDE_LIST = %w(a an and as at but by for in into of on onto to the)
 
@@ -65,27 +66,47 @@ class Redis
         if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
-              all(options.merge(:conditions => {:#{primary_key} => ids}))
+              find(:all, merge_text_search_conditions(:#{primary_key}, ids, options))
             end
           EndMethod
         elsif defined?(MongoRecord::Base) and ancestors.include?(MongoRecord::Base)
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
-              all(options.merge(:conditions => {:#{primary_key} => ids}))
+              find(:all, merge_text_search_conditions(:#{primary_key}, ids, options))
             end
           EndMethod
-        elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
-          instance_eval <<-EndMethod
-            def text_search_find(ids, options)
-              all(options.merge(:conditions => {:#{primary_key} => ids}))
-            end
-          EndMethod
+        # elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
+        #   instance_eval <<-EndMethod
+        #     def text_search_find(ids, options)
+        #       all(options.merge(:conditions => {:#{primary_key} => ids}))
+        #     end
+        #   EndMethod
         elsif defined?(DataMapper::Resource) and included_modules.include?(DataMapper::Resource)          
           instance_eval <<-EndMethod
             def text_search_find(ids, options)
               get(ids, options)
             end
           EndMethod
+        end
+      end
+      
+      def merge_text_search_conditions(primary_key, ids, options)
+        case options[:conditions]
+        when Array
+          options[:conditions][0] = "(#{options[:conditions][0]}) AND #{primary_key} IN (?)"
+          options[:conditions] << ids
+          options
+        when Hash
+          if options[:conditions].has_key?(primary_key)
+            raise BadConditions, "Cannot specify primary key (#{primary_key}) in :conditions to #{self.name}.text_search"
+          end
+          options[:conditions][primary_key] = ids
+          options
+        when String
+          options[:conditions] = ["(#{options[:conditions]}) AND #{primary_key} IN (?)", ids]
+          options
+        else
+          options.merge(:conditions => {primary_key => ids})
         end
       end
 
@@ -151,11 +172,11 @@ class Redis
           Redis::TextSearch::Collection.create(page, per_page, total) do |pager|
             # Convert page/per_page to limit/offset
             options.merge!(:offset => pager.offset, :limit => pager.per_page)
-            pager.replace(send(finder, ids, options){ |*a| yield(*a) if block_given? })
+            ids.empty? ? pager.replace([]) : pager.replace(send(finder, ids, options){ |*a| yield(*a) if block_given? })
           end
         else
           # Execute finder directly
-          send(finder, ids, options)
+          ids.empty? ? [] : send(finder, ids, options)
         end
       end
 

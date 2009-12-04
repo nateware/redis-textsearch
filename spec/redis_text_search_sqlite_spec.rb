@@ -168,6 +168,21 @@ describe Redis::TextSearch do
     rescue => error
     end
     error.should be_kind_of ActiveRecord::MissingAttributeError
+
+    # Merging conditions for SQL
+    check_result_ids Post.text_search('some', :conditions => 'id < 2'), [1]
+    check_result_ids Post.text_search('some', :conditions => ['id < ?', 2]), [1]
+    check_result_ids Post.text_search('some', :conditions => ['id = ?', 1]), [1]
+    check_result_ids Post.text_search('some', :conditions => ['id = ? and title = ?', 1, TITLES[0]]), [1]
+    check_result_ids Post.text_search('some', :conditions => {:title => TITLES[0]}), [1]
+    check_result_ids Post.text_search('some', :conditions => {:title => TITLES[0], :tags => TAGS[0] * ' '}), [1]
+
+    error = nil
+    begin
+      check_result_ids Post.text_search('some', :conditions => {:id => 1}), [1]
+    rescue => error
+    end
+    error.should be_kind_of Redis::TextSearch::BadConditions
   end
 
   it "should handle pagination" do
