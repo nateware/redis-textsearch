@@ -118,6 +118,19 @@ module Redis::TextSearch
       @total_entries = number.to_i
       @total_pages   = (@total_entries / per_page.to_f).ceil
     end
+    
+    # returns the current start ordinal of the paginated collection
+    def row_start  
+      @total_entries > 0 ? offset + 1 : 0
+    end
+ 
+    # returns the current end ordinal of the paginated collection
+    def row_end
+      end_ordinal = offset + per_page
+      # bounds check row_end
+      end_ordinal = @total_entries if end_ordinal > @total_entries
+      end_ordinal
+    end
 
     # This is a magic wrapper for the original Array#replace method. It serves
     # for populating the paginated collection after initialization.
