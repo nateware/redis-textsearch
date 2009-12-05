@@ -223,8 +223,16 @@ describe Redis::TextSearch do
     res.per_page.should == 5
     res.current_page.should == 2
     
-    res = Post.text_search('some', :page => 1, :per_page => 1, :conditions => ['id > ?', 2])
+    res = Post.text_search('some', :page => 1, :per_page => 1, :conditions => ['id > ?', 2], :order => 'id')
     check_result_ids res, [3]
+    res.total_entries.should == 1
+    res.total_pages.should == 1
+    res.per_page.should == 1
+    res.current_page.should == 1
+
+    res = Post.text_search('some', :page => 1, :per_page => 1, :order => 'id',
+                           :conditions => ['title = :title', {:title => TITLES[0]}])
+    check_result_ids res, [1]
     res.total_entries.should == 1
     res.total_pages.should == 1
     res.per_page.should == 1

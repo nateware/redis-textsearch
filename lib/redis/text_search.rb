@@ -166,6 +166,7 @@ class Redis
         end
 
         # Assemble our options for our finder conditions (destructive for speed)
+        recalculate_count = options.has_key?(:conditions)
         merge_text_search_conditions!(ids, options)
 
         # Calculate pagination if applicable. Presence of :page indicates we want pagination.
@@ -182,7 +183,7 @@ class Redis
               pager.total_entries = 0
             else
               pager.replace(send(finder, options){ |*a| yield(*a) if block_given? })
-              pager.total_entries = wp_count(options, [], finder.to_s)  # hacked into will_paginate for compat
+              pager.total_entries = recalculate_count ? wp_count(options, [], finder.to_s) : ids.length  # hacked into will_paginate for compat
             end
           end
         else
