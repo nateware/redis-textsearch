@@ -20,9 +20,14 @@ end
 class Post < ActiveRecord::Base
   include Redis::TextSearch
   include Marshal
+  
+  BLOG = 101
+  INFO = 102
+  CAL  = 103
 
   text_index :title
   text_index :tags, :exact => true
+  text_index :type_id, :exact => true
 end
 
 class CreatePosts < ActiveRecord::Migration
@@ -30,6 +35,7 @@ class CreatePosts < ActiveRecord::Migration
     create_table :posts do |t|
       t.string :title
       t.string :tags
+      t.integer :type_id
       t.timestamps
     end
   end
@@ -52,20 +58,25 @@ TAGS = [
   ['gaming','technical']
 ]
 
+TYPES = [
+  Post::BLOG,
+  Post::BLOG,
+  Post::INFO
+]
 
 describe Redis::TextSearch do
   before :all do
     CreatePosts.up
     
-    @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ')
+    @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :type_id => TYPES[0])
     # @post.id = 1
     @post.save!
     # sleep 1 # sqlite timestamps
-    @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1] * ' ')
+    @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1] * ' ', :type_id => TYPES[1])
     # @post2.id = 2
     @post2.save!
     # sleep 1 # sqlite timestamps
-    @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ')
+    @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ', :type_id => TYPES[2])
     # @post3.id = 3
     @post3.save!
     # sleep 1 # sqlite timestamps
@@ -153,6 +164,7 @@ describe Redis::TextSearch do
       res.first.tags
     rescue => error
     end
+    error.should_not be_nil
     error.should be_kind_of ActiveRecord::MissingAttributeError
     
     error = nil
@@ -160,6 +172,7 @@ describe Redis::TextSearch do
       res.first.updated_at
     rescue => error
     end
+    error.should_not be_nil
     error.should be_kind_of ActiveRecord::MissingAttributeError
 
     error = nil
@@ -167,6 +180,7 @@ describe Redis::TextSearch do
       res.first.created_at
     rescue => error
     end
+    error.should_not be_nil
     error.should be_kind_of ActiveRecord::MissingAttributeError
 
     # Merging conditions for SQL
@@ -183,6 +197,7 @@ describe Redis::TextSearch do
       check_result_ids Post.text_search('some', :conditions => {:id => 1}), [1]
     rescue => error
     end
+    error.should_not be_nil
     error.should be_kind_of Redis::TextSearch::BadConditions
   end
 
@@ -207,6 +222,13 @@ describe Redis::TextSearch do
     res.total_pages.should == 1
     res.per_page.should == 5
     res.current_page.should == 2
+    
+    res = Post.text_search('some', :page => 1, :per_page => 1, :conditions => ['id > ?', 2])
+    check_result_ids res, [3]
+    res.total_entries.should == 1
+    res.total_pages.should == 1
+    res.per_page.should == 1
+    res.current_page.should == 1
   end
 
   it "should support a hash to the text_search method" do

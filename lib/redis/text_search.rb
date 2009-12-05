@@ -27,6 +27,7 @@ class Redis
         klass.instance_variable_set('@text_index_exclude_list', DEFAULT_EXCLUDE_LIST)
         klass.send :include, InstanceMethods
         klass.extend ClassMethods
+        klass.extend WpHelpers unless respond_to?(:wp_count)
         klass.guess_text_search_find
         class << klass
           define_method(:per_page) { 30 } unless respond_to?(:per_page)
@@ -65,14 +66,14 @@ class Redis
       def guess_text_search_find
         if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
           instance_eval <<-EndMethod
-            def text_search_find(ids, options)
-              find(:all, merge_text_search_conditions(:#{primary_key}, ids, options))
+            def text_search_find(options)
+              all(options)
             end
           EndMethod
         elsif defined?(MongoRecord::Base) and ancestors.include?(MongoRecord::Base)
           instance_eval <<-EndMethod
-            def text_search_find(ids, options)
-              find(:all, merge_text_search_conditions(:#{primary_key}, ids, options))
+            def text_search_find(options)
+              all(options)
             end
           EndMethod
         # elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
@@ -83,36 +84,32 @@ class Redis
         #   EndMethod
         elsif defined?(DataMapper::Resource) and included_modules.include?(DataMapper::Resource)          
           instance_eval <<-EndMethod
-            def text_search_find(ids, options)
-              get(ids, options)
+            def text_search_find(options)
+              get(options)
             end
           EndMethod
         end
       end
       
-      def merge_text_search_conditions(primary_key, ids, options)
+      def merge_text_search_conditions!(ids, options)
         case options[:conditions]
         when Array
           if options[:conditions][1].is_a?(Hash)
             options[:conditions][0] = "(#{options[:conditions][0]}) AND #{primary_key} IN (:text_search_ids)"
             options[:conditions][1][:text_search_ids] = ids
-            options
           else
             options[:conditions][0] = "(#{options[:conditions][0]}) AND #{primary_key} IN (?)"
             options[:conditions] << ids
-            options
           end
         when Hash
-          if options[:conditions].has_key?(primary_key)
+          if options[:conditions].has_key?(primary_key.to_sym)
             raise BadConditions, "Cannot specify primary key (#{primary_key}) in :conditions to #{self.name}.text_search"
           end
-          options[:conditions][primary_key] = ids
-          options
+          options[:conditions][primary_key.to_sym] = ids
         when String
           options[:conditions] = ["(#{options[:conditions]}) AND #{primary_key} IN (?)", ids]
-          options
         else
-          options.merge(:conditions => {primary_key => ids})
+          options.merge!(:conditions => {primary_key => ids})
         end
       end
 
@@ -168,21 +165,29 @@ class Redis
           end
         end
 
+        # Assemble our options for our finder conditions (destructive for speed)
+        merge_text_search_conditions!(ids, options)
+
         # Calculate pagination if applicable. Presence of :page indicates we want pagination.
         # Adapted from will_paginate/finder.rb
         if options.has_key?(:page)
           page = options.delete(:page) || 1
           per_page = options.delete(:per_page) || self.per_page
-          total = ids.length
 
-          Redis::TextSearch::Collection.create(page, per_page, total) do |pager|
+          Redis::TextSearch::Collection.create(page, per_page, nil) do |pager|
             # Convert page/per_page to limit/offset
             options.merge!(:offset => pager.offset, :limit => pager.per_page)
-            ids.empty? ? pager.replace([]) : pager.replace(send(finder, ids, options){ |*a| yield(*a) if block_given? })
+            if ids.empty?
+              pager.replace([])
+              pager.total_entries = 0
+            else
+              pager.replace(send(finder, options){ |*a| yield(*a) if block_given? })
+              pager.total_entries = wp_count(options, [], finder.to_s)  # hacked into will_paginate for compat
+            end
           end
         else
           # Execute finder directly
-          ids.empty? ? [] : send(finder, ids, options)
+          ids.empty? ? [] : send(finder, options)
         end
       end
 
@@ -248,7 +253,7 @@ class Redis
         fields = self.class.text_indexes.keys if fields.empty?
         fields.each do |field|
           options = self.class.text_indexes[field]
-          value = self.send(field)
+          value = self.send(field).to_s
           return false if value.length < options[:minlength]  # too short to index
           indexes = []
 
@@ -315,7 +320,67 @@ class Redis
           end
         end
       end
-      
-    end
+
+    end # InstanceMethods
+    
+    module WpHelpers
+      # Does the not-so-trivial job of finding out the total number of entries
+      # in the database. It relies on the ActiveRecord +count+ method.
+      def wp_count(options, args, finder)
+        excludees = [:count, :order, :limit, :offset, :readonly]
+        if defined?(ActiveRecord::Calculations)
+          excludees << :from unless ActiveRecord::Calculations::CALCULATIONS_OPTIONS.include?(:from)
+        end
+
+        # we may be in a model or an association proxy
+        klass = (@owner and @reflection) ? @reflection.klass : self
+
+        # Use :select from scope if it isn't already present.
+        options[:select] = scope(:find, :select) unless options[:select]
+
+        if options[:select] and options[:select] =~ /^\s*DISTINCT\b/i
+          # Remove quoting and check for table_name.*-like statement.
+          if options[:select].gsub('`', '') =~ /\w+\.\*/
+            options[:select] = "DISTINCT #{klass.table_name}.#{klass.primary_key}"
+          end
+        else
+          excludees << :select # only exclude the select param if it doesn't begin with DISTINCT
+        end
+
+        # count expects (almost) the same options as find
+        count_options = options.except *excludees
+
+        # merge the hash found in :count
+        # this allows you to specify :select, :order, or anything else just for the count query
+        count_options.update options[:count] if options[:count]
+
+        # forget about includes if they are irrelevant (Rails 2.1)
+        if count_options[:include] and
+            klass.private_methods.include_method?(:references_eager_loaded_tables?) and
+            !klass.send(:references_eager_loaded_tables?, count_options)
+          count_options.delete :include
+        end
+
+        # we may have to scope ...
+        counter = Proc.new { count(count_options) }
+
+        count = if finder.index('find_') == 0 and klass.respond_to?(scoper = finder.sub('find', 'with'))
+                  # scope_out adds a 'with_finder' method which acts like with_scope, if it's present
+                  # then execute the count with the scoping provided by the with_finder
+                  send(scoper, &counter)
+                elsif finder =~ /^find_(all_by|by)_([_a-zA-Z]\w*)$/
+                  # extract conditions from calls like "paginate_by_foo_and_bar"
+                  attribute_names = $2.split('_and_')
+                  conditions = construct_attributes_from_arguments(attribute_names, args)
+                  with_scope(:find => { :conditions => conditions }, &counter)
+                else
+                  counter.call
+                end
+
+        count.respond_to?(:length) ? count.length : count
+      end
+
+    end  # WpHelpers
+    
   end
 end

@@ -7,7 +7,7 @@ class Post
   text_index :title
   text_index :tags, :exact => true
 
-  def self.text_search_find(ids, options)
+  def self.text_search_find(options)
     options.empty? ? ids : [ids, options]
   end
 
