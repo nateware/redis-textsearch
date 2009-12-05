@@ -92,22 +92,23 @@ class Redis
       end
       
       def merge_text_search_conditions!(ids, options)
+        pk = "#{table_name}.#{primary_key}"
         case options[:conditions]
         when Array
           if options[:conditions][1].is_a?(Hash)
-            options[:conditions][0] = "(#{options[:conditions][0]}) AND #{primary_key} IN (:text_search_ids)"
+            options[:conditions][0] = "(#{options[:conditions][0]}) AND #{pk} IN (:text_search_ids)"
             options[:conditions][1][:text_search_ids] = ids
           else
-            options[:conditions][0] = "(#{options[:conditions][0]}) AND #{primary_key} IN (?)"
+            options[:conditions][0] = "(#{options[:conditions][0]}) AND #{pk} IN (?)"
             options[:conditions] << ids
           end
         when Hash
           if options[:conditions].has_key?(primary_key.to_sym)
-            raise BadConditions, "Cannot specify primary key (#{primary_key}) in :conditions to #{self.name}.text_search"
+            raise BadConditions, "Cannot specify primary key (#{pk}) in :conditions to #{self.name}.text_search"
           end
           options[:conditions][primary_key.to_sym] = ids
         when String
-          options[:conditions] = ["(#{options[:conditions]}) AND #{primary_key} IN (?)", ids]
+          options[:conditions] = ["(#{options[:conditions]}) AND #{pk} IN (?)", ids]
         else
           options.merge!(:conditions => {primary_key => ids})
         end
