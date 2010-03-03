@@ -1,9 +1,10 @@
 
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 
+DBFILE = File.dirname(__FILE__) + '/test.db'
+
 require 'active_record'
-ActiveRecord::Base.establish_connection(:adapter => 'sqlite3', :database => 'test.db')
-ActiveRecord::Base.logger = Logger.new(STDOUT)
+require 'fileutils'
 
 def check_result_ids(results, ids, sort=true)
   results.length.should == ids.length
@@ -66,6 +67,9 @@ TYPES = [
 
 describe Redis::TextSearch do
   before :all do
+    ActiveRecord::Base.establish_connection(:adapter => 'sqlite3', :database => DBFILE)
+    ActiveRecord::Base.logger = Logger.new(STDOUT)
+
     CreatePosts.up
     
     @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :type_id => TYPES[0])
@@ -88,6 +92,7 @@ describe Redis::TextSearch do
 
   after :all do 
     CreatePosts.down
+    FileUtils.rm_f DBFILE
   end
 
   it "should define text indexes in the class" do

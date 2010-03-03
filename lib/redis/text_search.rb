@@ -28,7 +28,6 @@ class Redis
         klass.send :include, InstanceMethods
         klass.extend ClassMethods
         klass.extend WpHelpers unless respond_to?(:wp_count)
-        klass.guess_text_search_find
         class << klass
           define_method(:per_page) { 30 } unless respond_to?(:per_page)
         end
@@ -63,31 +62,14 @@ class Redis
       # This is called when the class is imported, and uses reflection to guess
       # how to retrieve records.  You can override it by explicitly defining a
       # +text_search_find+ class method that takes an array of IDs as an argument.
-      def guess_text_search_find
+      def text_search_find(ids, options)
         if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
-          instance_eval <<-EndMethod
-            def text_search_find(options)
-              all(options)
-            end
-          EndMethod
-        elsif defined?(MongoRecord::Base) and ancestors.include?(MongoRecord::Base)
-          instance_eval <<-EndMethod
-            def text_search_find(options)
-              all(options)
-            end
-          EndMethod
-        # elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
-        #   instance_eval <<-EndMethod
-        #     def text_search_find(ids, options)
-        #       all(options.merge(:conditions => {:#{primary_key} => ids}))
-        #     end
-        #   EndMethod
+          merge_text_search_conditions!(ids, options)
+          all(options)
+        elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
+          self[primary_key.to_sym => ids].filter(options)
         elsif defined?(DataMapper::Resource) and included_modules.include?(DataMapper::Resource)          
-          instance_eval <<-EndMethod
-            def text_search_find(options)
-              get(options)
-            end
-          EndMethod
+          get(options)
         end
       end
       
@@ -168,7 +150,6 @@ class Redis
 
         # Assemble our options for our finder conditions (destructive for speed)
         recalculate_count = options.has_key?(:conditions)
-        merge_text_search_conditions!(ids, options)
 
         # Calculate pagination if applicable. Presence of :page indicates we want pagination.
         # Adapted from will_paginate/finder.rb
@@ -183,13 +164,13 @@ class Redis
               pager.replace([])
               pager.total_entries = 0
             else
-              pager.replace(send(finder, options){ |*a| yield(*a) if block_given? })
+              pager.replace(send(finder, ids, options){ |*a| yield(*a) if block_given? })
               pager.total_entries = recalculate_count ? wp_count(options, [], finder.to_s) : ids.length  # hacked into will_paginate for compat
             end
           end
         else
           # Execute finder directly
-          ids.empty? ? [] : send(finder, options)
+          ids.empty? ? [] : send(finder, ids, options)
         end
       end
 

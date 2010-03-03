@@ -7,7 +7,10 @@ class Post
   text_index :title
   text_index :tags, :exact => true
 
-  def self.text_search_find(options)
+  def self.table_name;  'post'; end
+  def self.primary_key; 'id'; end
+
+  def self.text_search_find(ids, options)
     options.empty? ? ids : [ids, options]
   end
 
