@@ -63,16 +63,19 @@ class Redis
       # how to retrieve records.  You can override it by explicitly defining a
       # +text_search_find+ class method that takes an array of IDs as an argument.
       def text_search_find(ids, options)
-        if defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
+        if defined?(ActiveModel)
+          # guess that we're on Rails 3
+          raise "text_search_find not implemented for Rails 3 (yet) - patches welcome"
+        elsif defined?(ActiveRecord::Base) and ancestors.include?(ActiveRecord::Base)
           merge_text_search_conditions!(ids, options)
           all(options)
         elsif defined?(Sequel::Model) and ancestors.include?(Sequel::Model)
           self[primary_key.to_sym => ids].filter(options)
         elsif defined?(DataMapper::Resource) and included_modules.include?(DataMapper::Resource)          
-          get(options)
+          get(options.merge(primary_key.to_sym => ids))
         end
       end
-      
+
       def merge_text_search_conditions!(ids, options)
         pk = "#{table_name}.#{primary_key}"
         case options[:conditions]
@@ -100,7 +103,7 @@ class Redis
       # update_text_indexes after record save or at the appropriate point.
       def text_index(*args)
         options = args.last.is_a?(Hash) ? args.pop : {}
-        options[:minlength] ||= 1
+        options[:minlength] ||= 2
         options[:split] ||= /\s+/
         raise ArgumentError, "Must specify fields to index to #{self.name}.text_index" unless args.length > 0
         args.each do |name|
@@ -253,11 +256,22 @@ class Redis
               indexes << "#{options[:key]}:#{str}"
             else
               len = options[:minlength]
-              while len < val.length
-                str = val[0..len].gsub(/\s+/, '.')  # can't have " " in Redis cmd string
+              while len <= val.length
+                str = val[0,len].gsub(/\s+/, '.')  # can't have " " in Redis cmd string
                 indexes << "#{options[:key]}:#{str}"
                 len += 1
               end
+            end
+          end
+          
+          # Also left-anchor the cropped string if "full" is specified
+          if options[:full]
+            val = values.join('.')
+            len = options[:minlength]
+            while len <= val.length
+              str = val[0,len].gsub(/\s+/, '.')  # can't have " " in Redis cmd string
+              indexes << "#{options[:key]}:#{str}"
+              len += 1
             end
           end
 

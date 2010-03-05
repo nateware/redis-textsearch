@@ -3,8 +3,12 @@ require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 
 DBFILE = File.dirname(__FILE__) + '/test.db'
 
+require 'logger'
 require 'active_record'
 require 'fileutils'
+
+ActiveRecord::Base.establish_connection(:adapter => 'sqlite3', :database => DBFILE)
+ActiveRecord::Base.logger = Logger.new(STDOUT)
 
 def check_result_ids(results, ids, sort=true)
   results.length.should == ids.length
@@ -67,9 +71,6 @@ TYPES = [
 
 describe Redis::TextSearch do
   before :all do
-    ActiveRecord::Base.establish_connection(:adapter => 'sqlite3', :database => DBFILE)
-    ActiveRecord::Base.logger = Logger.new(STDOUT)
-
     CreatePosts.up
     
     @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :type_id => TYPES[0])

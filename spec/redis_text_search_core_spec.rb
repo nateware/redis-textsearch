@@ -6,6 +6,7 @@ class Post
 
   text_index :title
   text_index :tags, :exact => true
+  text_index :description, :full => true
 
   def self.table_name;  'post'; end
   def self.primary_key; 'id'; end
@@ -24,7 +25,7 @@ class Post
   end
   def id; @id; end
   def method_missing(name, *args)
-    @attrib[name] || super
+    @attrib.has_key?(name) ? @attrib[name] : super
   end
 end
 
@@ -38,15 +39,15 @@ TITLES = [
 TAGS = [
   ['personal', 'nontechnical'],
   ['mysql', 'technical'],
-  ['gaming','technical']
+  ['gaming','technical'],
+  ['character', 'halloween']
 ]
-
 
 describe Redis::TextSearch do
   before :all do
-    @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :id => 1)
-    @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2)
-    @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ', :id => 3)
+    @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :id => 1, :description => nil)
+    @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2, :description => nil)
+    @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ', :id => 3, :description => nil)
 
     @post.delete_text_indexes
     @post2.delete_text_indexes
@@ -62,6 +63,7 @@ describe Redis::TextSearch do
     @post.update_text_indexes
     @post2.update_text_indexes
 
+    Post.redis.set_members('post:text_index:title:s').should == []
     Post.redis.set_members('post:text_index:title:so').should == ['1']
     Post.redis.set_members('post:text_index:title:som').should == ['1']
     Post.redis.set_members('post:text_index:title:some').should == ['1']
@@ -69,6 +71,7 @@ describe Redis::TextSearch do
     Post.redis.set_members('post:text_index:title:pla').sort.should == ['1','2']
     Post.redis.set_members('post:text_index:title:plai').sort.should == ['1','2']
     Post.redis.set_members('post:text_index:title:plain').sort.should == ['1','2']
+    Post.redis.set_members('post:text_index:title:t').should == []
     Post.redis.set_members('post:text_index:title:te').sort.should == ['1','2']
     Post.redis.set_members('post:text_index:title:tex').sort.should == ['1','2']
     Post.redis.set_members('post:text_index:title:text').sort.should == ['1','2']
@@ -78,6 +81,7 @@ describe Redis::TextSearch do
     Post.redis.set_members('post:text_index:title:textstri').should == ['2']
     Post.redis.set_members('post:text_index:title:textstrin').should == ['2']
     Post.redis.set_members('post:text_index:title:textstring').should == ['2']
+    Post.redis.set_members('post:text_index:tags:p').should == []
     Post.redis.set_members('post:text_index:tags:pe').should == []
     Post.redis.set_members('post:text_index:tags:per').should == []
     Post.redis.set_members('post:text_index:tags:pers').should == []
@@ -85,6 +89,7 @@ describe Redis::TextSearch do
     Post.redis.set_members('post:text_index:tags:person').should == []
     Post.redis.set_members('post:text_index:tags:persona').should == []
     Post.redis.set_members('post:text_index:tags:personal').should == ['1']
+    Post.redis.set_members('post:text_index:tags:n').should == []
     Post.redis.set_members('post:text_index:tags:no').should == []
     Post.redis.set_members('post:text_index:tags:non').should == []
     Post.redis.set_members('post:text_index:tags:nont').should == []
@@ -133,6 +138,39 @@ describe Redis::TextSearch do
     Post.text_search(:tags => ['technical','MYsql'], :title => 'some').should == []
     Post.text_search(:tags => 'technical', :title => 'comments').sort.should == ['2','3']
   end
+  
+  it "should support full-phrase and sub-phrase simultaneously" do
+    @post4 = Post.new(:title => 'Dude', :description => 'Red flame dude', :tags => TAGS[3], :id => 4)
+    @post4.delete_text_indexes
+    @post4.update_text_indexes
+    Post.text_search(:description => 'Red flame dude').should == ['4']
+    Post.text_search(:description => 'Red flame dude', :tags => 'character').should == ['4']
+    Post.text_search(:description => 'Red').should == ['4']
+    Post.text_search(:description => 'Red', :tags => 'character').should == ['4']
+    Post.text_search(:description => 'Red', :tags => 'luigi').should == []
+    Post.text_search(:description => 'Red flame').should == ['4']
+    Post.text_search(:description => 'Red flame', :tags => 'halloween').should == ['4']
+    Post.text_search(:description => 'Red flame', :tags => 'hallowee').should == []
+    Post.text_search(:description => 'red FLame').should == ['4']
+    Post.text_search(:description => 'Red fla').should == ['4']
+    Post.text_search(:description => 'flame').should == ['4']
+    Post.text_search(:description => 'flame dude').should == []  # NOT SUPPORTED (must left-anchor)
+
+    Post.redis.set_members('post:text_index:description:red.flame.dude').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flame.dud').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flame.du').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flame.d').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flame.').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flame').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.flam').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.fla').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.fl').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.f').should == ['4']
+    Post.redis.set_members('post:text_index:description:red.').should == ['4']
+    Post.redis.set_members('post:text_index:description:red').should == ['4']
+    Post.redis.set_members('post:text_index:description:re').should == ['4']
+    Post.redis.set_members('post:text_index:description:r').should == []
+  end
 
   # MUST BE LAST!!!!!!
   it "should delete text indexes" do
@@ -142,5 +180,6 @@ describe Redis::TextSearch do
     @post.text_indexes.should == []
     @post2.text_indexes.should == []
     @post3.text_indexes.should == []
+    Post.delete_text_indexes(4)
   end
 end
