@@ -17,13 +17,11 @@ that just returns a string, or an MD5 of a filename, or something else unique.
 
 == Installation
 
-    gem install gemcutter
-    gem tumble
     gem install redis-textsearch
 
 == Initialization
     
-If on Rails, config/initializers/redis.rb is a good place for this:
+If you're using Rails, config/initializers/redis.rb is a good place for this:
 
     require 'redis'
     require 'redis/text_search'
@@ -89,5 +87,5 @@ hash must be in brackets:
 
 == Author
 
-Copyright (c) 2009 {Nate Wiger}[http://nate.wiger.org].  All Rights Reserved.
+Copyright (c) 2009-2010 {Nate Wiger}[http://nate.wiger.org].  All Rights Reserved.
 Released under the {Artistic License}[http://www.opensource.org/licenses/artistic-license-2.0.php].
