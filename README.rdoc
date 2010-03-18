@@ -36,6 +36,7 @@ Model class:
 
       text_index :title, :minlength => 2
       text_index :tags, :exact => true
+      text_index :description, :full => true  # allow full-phrase "Search With Spaces"
 
       # Using AR callback (you can call update_text_indexes anywhere on your instance)
       after_save do |r|

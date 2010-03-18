@@ -240,7 +240,7 @@ class Redis
         fields.each do |field|
           options = self.class.text_indexes[field]
           value = self.send(field).to_s
-          return false if value.length < options[:minlength]  # too short to index
+          next if value.length < options[:minlength]  # too short to index
           indexes = []
 
           # If values is array, like :tags => ["a", "b"], use as-is
