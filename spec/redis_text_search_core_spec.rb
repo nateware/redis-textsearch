@@ -44,7 +44,7 @@ TAGS = [
 ]
 
 describe Redis::TextSearch do
-  before :all do
+  before do
     @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :id => 1, :description => nil)
     @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2, :description => nil)
     @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ', :id => 3, :description => nil)
@@ -52,6 +52,10 @@ describe Redis::TextSearch do
     @post.delete_text_indexes
     @post2.delete_text_indexes
     Post.delete_text_indexes(3)
+    
+    @post.update_text_indexes
+    @post2.update_text_indexes
+    @post3.update_text_indexes
   end
 
   it "should define text indexes in the class" do
@@ -60,50 +64,49 @@ describe Redis::TextSearch do
   end
 
   it "should update text indexes correctly" do
-    @post.update_text_indexes
-    @post2.update_text_indexes
-
-    Post.redis.set_members('post:text_index:title:s').should == []
-    Post.redis.set_members('post:text_index:title:so').should == ['1']
-    Post.redis.set_members('post:text_index:title:som').should == ['1']
-    Post.redis.set_members('post:text_index:title:some').should == ['1']
-    Post.redis.set_members('post:text_index:title:pl').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:pla').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:plai').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:plain').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:t').should == []
-    Post.redis.set_members('post:text_index:title:te').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:tex').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:text').sort.should == ['1','2']
-    Post.redis.set_members('post:text_index:title:texts').should == ['2']
-    Post.redis.set_members('post:text_index:title:textst').should == ['2']
-    Post.redis.set_members('post:text_index:title:textstr').should == ['2']
-    Post.redis.set_members('post:text_index:title:textstri').should == ['2']
-    Post.redis.set_members('post:text_index:title:textstrin').should == ['2']
-    Post.redis.set_members('post:text_index:title:textstring').should == ['2']
-    Post.redis.set_members('post:text_index:tags:p').should == []
-    Post.redis.set_members('post:text_index:tags:pe').should == []
-    Post.redis.set_members('post:text_index:tags:per').should == []
-    Post.redis.set_members('post:text_index:tags:pers').should == []
-    Post.redis.set_members('post:text_index:tags:perso').should == []
-    Post.redis.set_members('post:text_index:tags:person').should == []
-    Post.redis.set_members('post:text_index:tags:persona').should == []
-    Post.redis.set_members('post:text_index:tags:personal').should == ['1']
-    Post.redis.set_members('post:text_index:tags:n').should == []
-    Post.redis.set_members('post:text_index:tags:no').should == []
-    Post.redis.set_members('post:text_index:tags:non').should == []
-    Post.redis.set_members('post:text_index:tags:nont').should == []
-    Post.redis.set_members('post:text_index:tags:nonte').should == []
-    Post.redis.set_members('post:text_index:tags:nontec').should == []
-    Post.redis.set_members('post:text_index:tags:nontech').should == []
-    Post.redis.set_members('post:text_index:tags:nontechn').should == []
-    Post.redis.set_members('post:text_index:tags:nontechni').should == []
-    Post.redis.set_members('post:text_index:tags:nontechnic').should == []
-    Post.redis.set_members('post:text_index:tags:nontechnica').should == []
-    Post.redis.set_members('post:text_index:tags:nontechnical').should == ['1']
+    @post3.delete_text_indexes  # because this test evolved
+    Post.redis.smembers('post:text_index:title:s').should == []
+    Post.redis.smembers('post:text_index:title:so').should == ['1']
+    Post.redis.smembers('post:text_index:title:som').should == ['1']
+    Post.redis.smembers('post:text_index:title:some').should == ['1']
+    Post.redis.smembers('post:text_index:title:pl').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:pla').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:plai').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:plain').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:t').should == []
+    Post.redis.smembers('post:text_index:title:te').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:tex').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:text').sort.should == ['1','2']
+    Post.redis.smembers('post:text_index:title:texts').should == ['2']
+    Post.redis.smembers('post:text_index:title:textst').should == ['2']
+    Post.redis.smembers('post:text_index:title:textstr').should == ['2']
+    Post.redis.smembers('post:text_index:title:textstri').should == ['2']
+    Post.redis.smembers('post:text_index:title:textstrin').should == ['2']
+    Post.redis.smembers('post:text_index:title:textstring').should == ['2']
+    Post.redis.smembers('post:text_index:tags:p').should == []
+    Post.redis.smembers('post:text_index:tags:pe').should == []
+    Post.redis.smembers('post:text_index:tags:per').should == []
+    Post.redis.smembers('post:text_index:tags:pers').should == []
+    Post.redis.smembers('post:text_index:tags:perso').should == []
+    Post.redis.smembers('post:text_index:tags:person').should == []
+    Post.redis.smembers('post:text_index:tags:persona').should == []
+    Post.redis.smembers('post:text_index:tags:personal').should == ['1']
+    Post.redis.smembers('post:text_index:tags:n').should == []
+    Post.redis.smembers('post:text_index:tags:no').should == []
+    Post.redis.smembers('post:text_index:tags:non').should == []
+    Post.redis.smembers('post:text_index:tags:nont').should == []
+    Post.redis.smembers('post:text_index:tags:nonte').should == []
+    Post.redis.smembers('post:text_index:tags:nontec').should == []
+    Post.redis.smembers('post:text_index:tags:nontech').should == []
+    Post.redis.smembers('post:text_index:tags:nontechn').should == []
+    Post.redis.smembers('post:text_index:tags:nontechni').should == []
+    Post.redis.smembers('post:text_index:tags:nontechnic').should == []
+    Post.redis.smembers('post:text_index:tags:nontechnica').should == []
+    Post.redis.smembers('post:text_index:tags:nontechnical').should == ['1']
   end
 
   it "should search text indexes and return records" do
+    @post3.delete_text_indexes
     Post.text_search('some').should == ['1']
     @post3.update_text_indexes
     Post.text_search('some').sort.should == ['1','3']
@@ -156,20 +159,20 @@ describe Redis::TextSearch do
     Post.text_search(:description => 'flame').should == ['4']
     Post.text_search(:description => 'flame dude').should == []  # NOT SUPPORTED (must left-anchor)
 
-    Post.redis.set_members('post:text_index:description:red.flame.dude').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flame.dud').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flame.du').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flame.d').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flame.').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flame').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.flam').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.fla').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.fl').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.f').should == ['4']
-    Post.redis.set_members('post:text_index:description:red.').should == ['4']
-    Post.redis.set_members('post:text_index:description:red').should == ['4']
-    Post.redis.set_members('post:text_index:description:re').should == ['4']
-    Post.redis.set_members('post:text_index:description:r').should == []
+    Post.redis.smembers('post:text_index:description:red.flame.dude').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flame.dud').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flame.du').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flame.d').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flame.').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flame').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.flam').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.fla').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.fl').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.f').should == ['4']
+    Post.redis.smembers('post:text_index:description:red.').should == ['4']
+    Post.redis.smembers('post:text_index:description:red').should == ['4']
+    Post.redis.smembers('post:text_index:description:re').should == ['4']
+    Post.redis.smembers('post:text_index:description:r').should == []
   end
 
   # MUST BE LAST!!!!!!

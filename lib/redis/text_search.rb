@@ -111,15 +111,27 @@ class Redis
         end
       end
 
-      # Perform text search and return results from database. Options:
+      # Perform text search and return results from database. 
+      # This accepts two forms, either:
+      #
+      #   text_search(:field1 => ['string1','string2'], :field2 => 'string3')
+      #
+      # OR:
+      #
+      #  text_search('string1','string2', :fields => [:field1, :field2])
+      #
+      # The first is an AND, the latter an OR. Options:
       #
       #   'string', 'string2'
       #   :fields
       #   :page
       #   :per_page
+      #
+      # More docs coming soon(?)
       def text_search(*args)
         options = args.length > 1 && args.last.is_a?(Hash) ? args.pop : {}
-        fields = Array(options.delete(:fields) || @text_indexes.keys)
+        ids = text_search_ids(args, options)
+
         finder = options.delete(:finder)
         unless finder
           unless defined?(:text_search_find)
@@ -127,30 +139,7 @@ class Redis
           end
           finder = :text_search_find
         end
-
-        #
-        # Assemble set names for our intersection.
-        # Accept two ways of doing search: either {:field => ['value','value'], :field => 'value'},
-        # or 'value','value', :fields => [:field, :field].  The first is an AND, the latter an OR.
-        #
-        ids = []
-        if args.empty?
-          raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search"
-        elsif args.first.is_a?(Hash)
-          sets = []
-          args.first.each do |f,v|
-            sets += text_search_sets_for(f,v)
-          end
-          # Execute single intersection (AND)
-          ids = redis.set_intersect(*sets)
-        else
-          fields.each do |f|
-            sets = text_search_sets_for(f,args)
-            # Execute intersection per loop (OR)
-            ids += redis.set_intersect(*sets)
-          end
-        end
-
+        
         # Assemble our options for our finder conditions (destructive for speed)
         recalculate_count = options.has_key?(:conditions)
 
@@ -175,6 +164,30 @@ class Redis
           # Execute finder directly
           ids.empty? ? [] : send(finder, ids, options)
         end
+      end
+
+      # Return the ID's from the text search.  Normally only useful internally, but exposed
+      # in case you want to wrap your own DB query.
+      def text_search_ids(args, options={})
+        fields = Array(options.delete(:fields) || @text_indexes.keys)
+        ids = []
+        if args.empty?
+          raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search"
+        elsif args.first.is_a?(Hash)
+          sets = []
+          args.first.each do |f,v|
+            sets += text_search_sets_for(f,v)
+          end
+          # Execute single intersection (AND)
+          ids = redis.sinter(*sets)
+        else
+          fields.each do |f|
+            sets = text_search_sets_for(f,args)
+            # Execute intersection per loop (OR)
+            ids += redis.sinter(*sets)
+          end
+        end
+        ids
       end
 
       # Filter and return self. Chainable.
