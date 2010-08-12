@@ -2,6 +2,7 @@ require 'bacon'
 Bacon.summary_on_exit
 
 $LOAD_PATH.unshift File.expand_path(File.dirname(__FILE__) + '/../lib')
+gem 'redis', '>= 2.0.4'
 require 'redis'
 require 'redis/text_search'
 

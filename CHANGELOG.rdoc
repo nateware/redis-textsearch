@@ -1,0 +1,12 @@
+= Changelog for Redis::TextSearch
+
+== 0.2.0 (12 August 2010)
+
+* Now dependent on redis-rb client 2.0.4 or later.  Should still be backwards compatible with redis-server 1.x
+
+* Internal changes to bring client up-to-speed with redis-rb client changes
+
+== 0.1.x series
+
+* Core functionality implemented
+

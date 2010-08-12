@@ -142,12 +142,12 @@ class Redis
             sets += text_search_sets_for(f,v)
           end
           # Execute single intersection (AND)
-          ids = redis.set_intersect(*sets)
+          ids = redis.sinter(*sets)
         else
           fields.each do |f|
             sets = text_search_sets_for(f,args)
             # Execute intersection per loop (OR)
-            ids += redis.set_intersect(*sets)
+            ids += redis.sinter(*sets)
           end
         end
 
@@ -186,17 +186,24 @@ class Redis
       def delete_text_indexes(id, *fields)
         fields = @text_indexes.keys if fields.empty?
         fields.each do |field|
-          redis.pipelined do |pipe|
-            text_indexes_for(id, field).each do |key|
-              pipe.srem(key, id)
+          indexes = text_indexes_for(id, field)
+          redis.pipelined do
+            indexes.each do |key|
+              redis.srem(key, id)
             end
-            pipe.del field_key("#{field}_indexes", id)
+            # blow away the entire reverse index, because we deleted the object
+            redis.del reverse_index_key(id, field)
           end
         end
       end
 
+      def reverse_index_key(id, field)
+        field_key("#{field}_indexes", id)
+      end
+
       def text_indexes_for(id, field) #:nodoc:
-        (redis.get(field_key("#{field}_indexes", id)) || '').split(';')
+        v = redis.get reverse_index_key(id, field)
+        (v.nil? || v == '') ? [] : v.split(';')
       end
 
       def text_search_sets_for(field, values)
@@ -224,6 +231,11 @@ class Redis
       # as a utility method but maybe you will find it useful.
       def text_indexes_for(field)
         self.class.text_indexes_for(id, field)
+      end
+      
+      # Name of the reverse index key
+      def reverse_index_key(field)
+        self.class.reverse_index_key(id, field)
       end
 
       # Retrieve all text indexes
@@ -292,7 +304,7 @@ class Redis
           exec_pipelined_index_cmd(:srem, del_indexes)
           
           # Replace our reverse map of indexes
-          redis.set field_key("#{field}_indexes"), indexes.join(';')
+          redis.set reverse_index_key(field), indexes.join(';')
         end # fields.each
       end
 
@@ -311,9 +323,9 @@ class Redis
       
       def exec_pipelined_index_cmd(cmd, indexes)
         return if indexes.empty?
-        redis.pipelined do |pipe|
+        redis.pipelined do
           indexes.each do |key|
-            pipe.send(cmd, key, id)
+            redis.send(cmd, key, id)
           end
         end
       end
