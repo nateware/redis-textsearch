@@ -44,7 +44,7 @@ TAGS = [
 ]
 
 describe Redis::TextSearch do
-  before :all do
+  before do
     @post  = Post.new(:title => TITLES[0], :tags => TAGS[0] * ' ', :id => 1, :description => nil)
     @post2 = Post.new(:title => TITLES[1], :tags => TAGS[1], :id => 2, :description => nil)
     @post3 = Post.new(:title => TITLES[2], :tags => TAGS[2] * ' ', :id => 3, :description => nil)

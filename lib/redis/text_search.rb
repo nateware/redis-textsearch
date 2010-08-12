@@ -80,14 +80,14 @@ class Redis
         pk = "#{table_name}.#{primary_key}"
         case options[:conditions]
         when Array
-          if options[:conditions][1].is_a?(Hash)
+          if options[:conditions][1].is_a?(::Hash)
             options[:conditions][0] = "(#{options[:conditions][0]}) AND #{pk} IN (:text_search_ids)"
             options[:conditions][1][:text_search_ids] = ids
           else
             options[:conditions][0] = "(#{options[:conditions][0]}) AND #{pk} IN (?)"
             options[:conditions] << ids
           end
-        when Hash
+        when ::Hash
           if options[:conditions].has_key?(primary_key.to_sym)
             raise BadConditions, "Cannot specify primary key (#{pk}) in :conditions to #{self.name}.text_search"
           end
@@ -102,7 +102,7 @@ class Redis
       # Define fields to be indexed for text search.  To update the index, you must call
       # update_text_indexes after record save or at the appropriate point.
       def text_index(*args)
-        options = args.last.is_a?(Hash) ? args.pop : {}
+        options = args.last.is_a?(::Hash) ? args.pop : {}
         options[:minlength] ||= 2
         options[:split] ||= /\s+/
         raise ArgumentError, "Must specify fields to index to #{self.name}.text_index" unless args.length > 0
@@ -118,7 +118,7 @@ class Redis
       #   :page
       #   :per_page
       def text_search(*args)
-        options = args.length > 1 && args.last.is_a?(Hash) ? args.pop : {}
+        options = args.length > 1 && args.last.is_a?(::Hash) ? args.pop : {}
         fields = Array(options.delete(:fields) || @text_indexes.keys)
         finder = options.delete(:finder)
         unless finder
@@ -136,7 +136,7 @@ class Redis
         ids = []
         if args.empty?
           raise ArgumentError, "Must specify search string(s) to #{self.name}.text_search"
-        elsif args.first.is_a?(Hash)
+        elsif args.first.is_a?(::Hash)
           sets = []
           args.first.each do |f,v|
             sets += text_search_sets_for(f,v)
